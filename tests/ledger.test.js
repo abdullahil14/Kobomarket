@@ -1,0 +1,1 @@
+const {commission}=require('../src/utils/money'); test('commission integer math',()=>{expect(commission(10001,500)).toBe(500)}); test('no float money',()=>{expect(Number.isInteger(commission(999,500))).toBe(true)});

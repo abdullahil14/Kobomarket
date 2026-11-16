@@ -1,0 +1,16 @@
+const pool=require('./pool.pg');
+
+async function run(){await pool.query(`CREATE TABLE IF NOT EXISTS accounts(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),owner_type TEXT NOT NULL CHECK(owner_type IN('USER','SYSTEM')),owner_id TEXT NOT NULL,currency TEXT NOT NULL DEFAULT 'NGN',balance_kobo BIGINT NOT NULL DEFAULT 0 CHECK(balance_kobo>=0),status TEXT NOT NULL DEFAULT 'ACTIVE',created_at TIMESTAMPTZ DEFAULT now(),UNIQUE(owner_type,owner_id));
+CREATE TABLE IF NOT EXISTS transactions(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),reference TEXT UNIQUE NOT NULL,type TEXT NOT NULL,status TEXT NOT NULL DEFAULT 'PENDING',idempotency_key TEXT UNIQUE,request_hash TEXT,metadata JSONB DEFAULT '{}',response JSONB,created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS ledger_entries(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),transaction_id UUID REFERENCES transactions(id),account_id UUID REFERENCES accounts(id),direction TEXT CHECK(direction IN('debit','credit')),amount_kobo BIGINT NOT NULL CHECK(amount_kobo>0),created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS orders(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),buyer_id TEXT NOT NULL,total_kobo BIGINT NOT NULL CHECK(total_kobo>0),status TEXT NOT NULL DEFAULT 'PAID',created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS sub_orders(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),order_id UUID REFERENCES orders(id),vendor_id TEXT NOT NULL,total_kobo BIGINT NOT NULL CHECK(total_kobo>0),commission_kobo BIGINT NOT NULL DEFAULT 0,status TEXT NOT NULL DEFAULT 'PAID' CHECK(status IN('PENDING_PAYMENT','PAID','SHIPPED','DELIVERED','COMPLETED','CANCELLED','DISPUTED')),shipped_at TIMESTAMPTZ,delivered_at TIMESTAMPTZ,created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS order_items(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),sub_order_id UUID REFERENCES sub_orders(id),product_id TEXT NOT NULL,vendor_id TEXT NOT NULL,name TEXT,unit_price_kobo BIGINT NOT NULL CHECK(unit_price_kobo>=0),qty INT NOT NULL CHECK(qty>0),line_total_kobo BIGINT NOT NULL);
+CREATE TABLE IF NOT EXISTS payouts(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),vendor_id TEXT NOT NULL,amount_kobo BIGINT NOT NULL CHECK(amount_kobo>0),status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN('PENDING','PROCESSING','SUCCESS','FAILED')),idempotency_key TEXT UNIQUE,created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS disputes(id UUID PRIMARY KEY DEFAULT gen_random_uuid(),sub_order_id UUID REFERENCES sub_orders(id),buyer_id TEXT NOT NULL,reason TEXT,evidence JSONB DEFAULT '[]',status TEXT NOT NULL DEFAULT 'OPEN' CHECK(status IN('OPEN','RESOLVED')),resolution TEXT,resolved_by TEXT,resolution_note TEXT,refund_kobo BIGINT DEFAULT 0,created_at TIMESTAMPTZ DEFAULT now());
+CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+INSERT INTO settings(key,value) VALUES('commission_bps','500') ON CONFLICT DO NOTHING;
+-- system accounts
+INSERT INTO accounts(owner_type,owner_id) VALUES('SYSTEM','PLATFORM_ESCROW'),('SYSTEM','PLATFORM_REVENUE'),('SYSTEM','PLATFORM_PAYOUT_CLEARING') ON CONFLICT DO NOTHING;`);
+console.log('migrated'); 
+await pool.end();} run().catch(e=>{console.error(e);process.exit(1)});

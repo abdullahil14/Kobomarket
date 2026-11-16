@@ -1,0 +1,1 @@
+module.exports=(err,req,res,next)=>{const s=err.status||500; res.status(s).json({success:false,error:{code:err.code||'INTERNAL_ERROR',message:err.message||'Internal error',details:err.details}});};
